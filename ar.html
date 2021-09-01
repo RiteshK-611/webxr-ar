@@ -1,0 +1,228 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport"
+                content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+        <meta name='mobile-web-app-capable' content='yes'>
+        <meta name='apple-mobile-web-app-capable' content='yes'>
+        <title>Hello WebXR!</title>
+
+        <!-- three.js -->
+        <script src="https://unpkg.com/three@0.126.0/build/three.js"></script>
+
+        <script src="https://unpkg.com/three@0.126.0/examples/js/loaders/GLTFLoader.js"></script>
+
+        <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+    </head>
+    <body>
+        <model-viewer src="./assets/chair2.gltf"
+              ios-src="https://modelviewer.dev/shared-assets/models/Astronaut.usdz"
+              alt="A 3D model of an astronaut"
+              ar
+              auto-rotate
+              camera-controls
+              shadow-intensity="1"
+              ar-scale="fixed"
+              >
+              <!-- <div id="error" class="hide">AR is not supported on this device</div> -->
+
+              <button onclick="activateXR()" slot="ar-button" id="ar-button">
+                View in your space
+              </button>
+            
+
+        </model-viewer>
+        <!-- <model-viewer src="./webxr/media/gltf/rustic_chair/chair2.gltf"
+              ios-src="https://modelviewer.dev/shared-assets/models/Astronaut.usdz"
+              alt="A 3D model of an astronaut"
+              ar
+              auto-rotate
+              camera-controls
+              ar-scale="fixed"
+              ar-modes="webxr scene-viewer quick-look"
+              shadow-intensity="1"
+              activateAR()
+              xr-environment
+              >
+              <div id="error" class="hide">AR is not supported on this device</div>
+        </model-viewer> -->
+       
+        <!-- Starting an immersive WebXR session requires user interaction.
+            We start this one with a simple button. -->
+        <button onclick="activateXR()">Start Hello WebXR</button>
+        <script>
+            async function activateXR() {
+            // Add a canvas element and initialize a WebGL context that is compatible with WebXR.
+            const canvas = document.createElement("canvas");
+            document.body.appendChild(canvas);
+            const gl = canvas.getContext("webgl", {xrCompatible: true});
+
+            const scene = new THREE.Scene();
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.3);
+            directionalLight.position.set(10, 15, 10);
+            scene.add(directionalLight);
+
+            // Set up the WebGLRenderer, which handles rendering to the session's base layer.
+            const renderer = new THREE.WebGLRenderer({
+                alpha: true,
+                preserveDrawingBuffer: true,
+                canvas: canvas,
+                context: gl
+            });
+            renderer.autoClear = false;
+
+            // The API directly updates the camera matrices.
+            // Disable matrix auto updates so three.js doesn't attempt
+            // to handle the matrices independently.
+            const camera = new THREE.PerspectiveCamera();
+            camera.matrixAutoUpdate = false;
+
+            // Initialize a WebXR session using "immersive-ar".
+            const session = await navigator.xr.requestSession("immersive-ar", {requiredFeatures: ['hit-test']});
+            session.updateRenderState({
+            baseLayer: new XRWebGLLayer(session, gl)
+            });
+
+            // A 'local' reference space has a native origin that is located
+            // near the viewer's position at the time the session was created.
+            const referenceSpace = await session.requestReferenceSpace('local');
+
+            // Create another XRReferenceSpace that has the viewer as the origin.
+            const viewerSpace = await session.requestReferenceSpace('viewer');
+            // Perform hit testing using the viewer as origin.
+            const hitTestSource = await session.requestHitTestSource({ space: viewerSpace });
+
+            const loader = new THREE.GLTFLoader();
+            let reticle;
+            loader.load("https://immersive-web.github.io/webxr-samples/media/gltf/reticle/reticle.gltf", function(gltf) {
+            reticle = gltf.scene;
+            reticle.visible = false;
+            scene.add(reticle);
+            })
+
+            let flower;
+            loader.load("https://immersive-web.github.io/webxr-samples/media/gltf/sunflower/sunflower.gltf", function(gltf) {
+            flower = gltf.scene;
+            });
+            
+            session.addEventListener("select", (event) => {
+                if (flower) {
+                    const clone = flower.clone();
+                    clone.position.copy(reticle.position);
+                    scene.add(clone);
+                }
+            });
+
+            // Create a render loop that allows us to draw on the AR view.
+            const onXRFrame = (time, frame) => {
+            // Queue up the next draw request.
+            session.requestAnimationFrame(onXRFrame);
+
+            // Bind the graphics framebuffer to the baseLayer's framebuffer
+            gl.bindFramebuffer(gl.FRAMEBUFFER, session.renderState.baseLayer.framebuffer)
+
+            // Retrieve the pose of the device.
+            // XRFrame.getViewerPose can return null while the session attempts to establish tracking.
+            const pose = frame.getViewerPose(referenceSpace);
+            if (pose) {
+                // In mobile AR, we only have one view.
+                const view = pose.views[0];
+
+                const viewport = session.renderState.baseLayer.getViewport(view);
+                renderer.setSize(viewport.width, viewport.height)
+
+                // Use the view's transform matrix and projection matrix to configure the THREE.camera.
+                camera.matrix.fromArray(view.transform.matrix)
+                camera.projectionMatrix.fromArray(view.projectionMatrix);
+                camera.updateMatrixWorld(true);
+
+                const hitTestResults = frame.getHitTestResults(hitTestSource);
+                if (hitTestResults.length > 0 && reticle) {
+                const hitPose = hitTestResults[0].getPose(referenceSpace);
+                reticle.visible = true;
+                reticle.position.set(hitPose.transform.position.x, hitPose.transform.position.y, hitPose.transform.position.z)
+                reticle.updateMatrixWorld(true);
+                }
+
+                // Render the scene with THREE.WebGLRenderer.
+                renderer.render(scene, camera)
+            }
+            }
+            session.requestAnimationFrame(onXRFrame);
+        }
+        </script>
+
+        <style>
+            model-viewer {
+                background-color: #eee;
+                overflow-x: hidden;
+                --poster-color: #eee;
+                width: 400px;
+                height: 300px;
+            }
+
+            #ar-button {
+                background-image: url(./assets/ic_view_in_ar_new_googblue_48dp.png);
+                background-repeat: no-repeat;
+                background-size: 20px 20px;
+                background-position: 12px 50%;
+                background-color: #fff;
+                position: absolute;
+                left: 50%;
+                transform: translateX(-50%);
+                white-space: nowrap;
+                bottom: 12px;
+                padding: 0px 16px 0px 40px;
+                font-family: Roboto Regular, Helvetica Neue, sans-serif;
+                font-size: 14px;
+                color:#4285f4;
+                height: 36px;
+                line-height: 36px;
+                border-radius: 18px;
+                border: 1px solid #DADCE0;
+            }
+
+            #ar-button:active {
+                background-color: #E8EAED;
+            }
+
+            #ar-button:focus {
+                outline: none;
+            }
+
+            #ar-button:focus-visible {
+                outline: 1px solid #4285f4;
+            }
+
+            model-viewer > #ar-prompt {
+                position: absolute;
+                left: 50%;
+                bottom: 175px;
+                animation: elongate 2s infinite ease-in-out alternate;
+                display: none;
+            }
+
+            model-viewer[ar-status="session-started"] > #ar-prompt {
+                display: block;
+            }
+
+            model-viewer > #ar-prompt > img {
+                animation: circle 4s linear infinite;
+            }
+
+            model-viewer > #ar-failure {
+                position: absolute;
+                left: 50%;
+                transform: translateX(-50%);
+                bottom: 175px;
+                display: none;
+            }
+
+            model-viewer[ar-tracking="not-tracking"] > #ar-failure {
+                display: block;
+            }
+        </style>
+    </body>
+</html>
