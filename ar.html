@@ -50,7 +50,7 @@
        
         <!-- Starting an immersive WebXR session requires user interaction.
             We start this one with a simple button. -->
-        <button onclick="activateXR()">Start Hello WebXR</button>
+        <button onclick="activateXR()" id="ar-button1">Start Hello WebXR</button>
         <script>
             async function activateXR() {
             // Add a canvas element and initialize a WebGL context that is compatible with WebXR.
@@ -72,6 +72,8 @@
                 context: gl
             });
             renderer.autoClear = false;
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
             // The API directly updates the camera matrices.
             // Disable matrix auto updates so three.js doesn't attempt
@@ -93,6 +95,8 @@
             const viewerSpace = await session.requestReferenceSpace('viewer');
             // Perform hit testing using the viewer as origin.
             const hitTestSource = await session.requestHitTestSource({ space: viewerSpace });
+            // Start a rendering loop using onXRFrame.
+            session.requestAnimationFrame(onXRFrame);
 
             const loader = new THREE.GLTFLoader();
             let reticle;
@@ -112,43 +116,48 @@
                     const clone = flower.clone();
                     clone.position.copy(reticle.position);
                     scene.add(clone);
+
+                    const shadowMesh = scene.children.find(c => c.name === 'shadowMesh');
+                    shadowMesh.position.y = clone.position.y;
                 }
             });
 
             // Create a render loop that allows us to draw on the AR view.
             const onXRFrame = (time, frame) => {
-            // Queue up the next draw request.
-            session.requestAnimationFrame(onXRFrame);
+                // Queue up the next draw request.
+                session.requestAnimationFrame(onXRFrame);
 
-            // Bind the graphics framebuffer to the baseLayer's framebuffer
-            gl.bindFramebuffer(gl.FRAMEBUFFER, session.renderState.baseLayer.framebuffer)
+                // Bind the graphics framebuffer to the baseLayer's framebuffer
+                const framebuffer = session.renderState.baseLayer.framebuffer
+                gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer)
+                renderer.setFramebuffer(framebuffer)
 
-            // Retrieve the pose of the device.
-            // XRFrame.getViewerPose can return null while the session attempts to establish tracking.
-            const pose = frame.getViewerPose(referenceSpace);
-            if (pose) {
-                // In mobile AR, we only have one view.
-                const view = pose.views[0];
+                // Retrieve the pose of the device.
+                // XRFrame.getViewerPose can return null while the session attempts to establish tracking.
+                const pose = frame.getViewerPose(referenceSpace);
+                if (pose) {
+                    // In mobile AR, we only have one view.
+                    const view = pose.views[0];
 
-                const viewport = session.renderState.baseLayer.getViewport(view);
-                renderer.setSize(viewport.width, viewport.height)
+                    const viewport = session.renderState.baseLayer.getViewport(view);
+                    renderer.setSize(viewport.width, viewport.height)
 
-                // Use the view's transform matrix and projection matrix to configure the THREE.camera.
-                camera.matrix.fromArray(view.transform.matrix)
-                camera.projectionMatrix.fromArray(view.projectionMatrix);
-                camera.updateMatrixWorld(true);
+                    // Use the view's transform matrix and projection matrix to configure the THREE.camera.
+                    camera.matrix.fromArray(view.transform.matrix)
+                    camera.projectionMatrix.fromArray(view.projectionMatrix);
+                    camera.updateMatrixWorld(true);
 
-                const hitTestResults = frame.getHitTestResults(hitTestSource);
-                if (hitTestResults.length > 0 && reticle) {
-                const hitPose = hitTestResults[0].getPose(referenceSpace);
-                reticle.visible = true;
-                reticle.position.set(hitPose.transform.position.x, hitPose.transform.position.y, hitPose.transform.position.z)
-                reticle.updateMatrixWorld(true);
+                    const hitTestResults = frame.getHitTestResults(hitTestSource);
+                    if (hitTestResults.length > 0 && reticle) {
+                        const hitPose = hitTestResults[0].getPose(referenceSpace);
+                        reticle.visible = true;
+                        reticle.position.set(hitPose.transform.position.x, hitPose.transform.position.y, hitPose.transform.position.z)
+                        reticle.updateMatrixWorld(true);
+                    }
+
+                    // Render the scene with THREE.WebGLRenderer.
+                    renderer.render(scene, camera)
                 }
-
-                // Render the scene with THREE.WebGLRenderer.
-                renderer.render(scene, camera)
-            }
             }
             session.requestAnimationFrame(onXRFrame);
         }
@@ -182,6 +191,7 @@
                 line-height: 36px;
                 border-radius: 18px;
                 border: 1px solid #DADCE0;
+                cursor: pointer;
             }
 
             #ar-button:active {
@@ -222,6 +232,25 @@
 
             model-viewer[ar-tracking="not-tracking"] > #ar-failure {
                 display: block;
+            }
+
+            #ar-button1 {
+                background-image: url(./assets/ic_view_in_ar_new_googblue_48dp.png);
+                background-repeat: no-repeat;
+                background-size: 20px 20px;
+                background-position: 12px 50%;
+                background-color: #252525;
+                white-space: nowrap;
+                padding: 0px 16px 0px 40px;
+                font-family: Roboto Regular, Helvetica Neue, sans-serif;
+                font-size: 14px;
+                color:#4285f4;
+                height: 36px;
+                line-height: 36px;
+                border-radius: 18px;
+                border: 1px solid #DADCE0;
+                margin-top: 10px;
+                cursor: pointer;
             }
         </style>
     </body>
