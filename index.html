@@ -32,7 +32,7 @@
             
 
         </model-viewer> -->
-        <!-- <model-viewer src="./webxr/media/gltf/rustic_chair/chair2.gltf"
+        <model-viewer src="./assets/chair2.gltf"
               ios-src="https://modelviewer.dev/shared-assets/models/Astronaut.usdz"
               alt="A 3D model of an astronaut"
               ar
@@ -45,7 +45,7 @@
               xr-environment
               >
               <div id="error" class="hide">AR is not supported on this device</div>
-        </model-viewer> -->
+        </model-viewer>
        
         <!-- Starting an immersive WebXR session requires user interaction.
             We start this one with a simple button. -->
@@ -105,9 +105,9 @@
             scene.add(reticle);
             })
 
-            const model = "./assets/chair2.gltf"
+//             const model = "./assets/chair2.gltf"
             let flower;
-            loader.load(model, function(gltf) {
+            loader.load("./assets/chair2.gltf", function(gltf) {
             flower = gltf.scene;
             });
             
